@@ -2,22 +2,26 @@ from typing import OrderedDict
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .serializers import FoodListSerializer
+from .serializers import FoodSerializer, FoodListSerializer
 from core.models import Food, FoodCategory
 
 
 @api_view(['GET'])
 def get_foods(request):
     # setup()
-    foods = Food.objects.filter(is_publish=True)
-    food_codes = set(f.internal_code for f in foods)
-    categories = FoodCategory.objects.filter(food__in=foods).distinct()
-    data = FoodListSerializer(categories, many=True).data
-    for category in data:
-        foods: OrderedDict = category['foods']
-        for i in range(len(foods)-1, -1, -1):
-            if foods[i]['internal_code'] not in food_codes:
-                foods.pop(i)
+    foods = Food.objects.filter(is_publish=True).select_related()
+    category_to_foods = dict()
+    for f in foods:
+        if f.category not in category_to_foods:
+            category_to_foods[f.category] = []
+        category_to_foods[f.category].append(f)
+
+    data = []
+    for c in category_to_foods:
+        c_data = FoodListSerializer(c).data
+        c_data['foods'] = FoodSerializer(category_to_foods[c], many=True).data
+        data.append(c_data)
+    
 
     return Response(data)
 
